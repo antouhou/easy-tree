@@ -1,8 +1,26 @@
 [package]
 name = "easy-tree"
 version = "0.1.0"
+authors = ["Anton Suprunchuk <anton.suprunchuk@gmail.com>"]
 edition = "2021"
+description = "A simple and efficient tree structure library for Rust with recursive traversal"
+homepage = "https://github.com/antouhou/easy-tree"
+repository = "https://github.com/antouhou/easy-tree"
+license = "MIT"
+keywords = ["tree", "traversal", "data_structure", "hierarchical", "recursive"]
+categories = ["data-structures", "algorithms"]
+readme = "README.md"
 
-[dependencies.rayon]
-version = "1.10.0"
-optional = true
+[dependencies]
+# Add other dependencies here
+rayon = { version = "1.10", optional = true }
+
+[features]
+default = []
+
+[badges]
+github-actions = { repository = "antouhou/easy-tree" }
+
+# For documentation purpose
+[package.metadata.docs.rs]
+features = ["rayon"]

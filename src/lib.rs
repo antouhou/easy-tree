@@ -128,9 +128,7 @@ impl<T> Tree<T> {
 
     /// Adds a child node with the given data to the root node and returns the child's index.
     pub fn add_child_to_root(&mut self, data: T) -> usize {
-        let index = self.add_child(0, data);
-
-        index
+        self.add_child(0, data)
     }
 
     /// Returns a reference to the data of the node at the given index, or `None` if the index is
@@ -317,26 +315,36 @@ mod tests {
         let mut tree = Tree::new();
         let root = tree.add_node(0); // Root node with data 0
         let child1 = tree.add_child(root, 1); // Child node with data 1
-        let child2 = tree.add_child(root, 2); // Child node with data 2
-        let child3 = tree.add_child(child1, 3); // Child node with data 3
+        let _child2 = tree.add_child(root, 2); // Child node with data 2
+        let _child3 = tree.add_child(child1, 3); // Child node with data 3
 
         let mut result = vec![];
 
-        tree.traverse(|index, node, result| {
-            result.push(format!("Calling handler for node {}: {}", index, node))
-        }, |index, node, result| {
-            result.push(format!("Finished handling node {} and all it's children", index))
-        }, &mut result);
+        tree.traverse(
+            |index, node, result| {
+                result.push(format!("Calling handler for node {}: {}", index, node))
+            },
+            |index, _node, result| {
+                result.push(format!(
+                    "Finished handling node {} and all it's children",
+                    index
+                ))
+            },
+            &mut result,
+        );
 
-        assert_eq!(result, vec![
-            "Calling handler for node 0: 0",
-            "Calling handler for node 1: 1",
-            "Calling handler for node 3: 3",
-            "Finished handling node 3 and all it's children",
-            "Finished handling node 1 and all it's children",
-            "Calling handler for node 2: 2",
-            "Finished handling node 2 and all it's children",
-            "Finished handling node 0 and all it's children",
-        ]);
+        assert_eq!(
+            result,
+            vec![
+                "Calling handler for node 0: 0",
+                "Calling handler for node 1: 1",
+                "Calling handler for node 3: 3",
+                "Finished handling node 3 and all it's children",
+                "Finished handling node 1 and all it's children",
+                "Calling handler for node 2: 2",
+                "Finished handling node 2 and all it's children",
+                "Finished handling node 0 and all it's children",
+            ]
+        );
     }
 }
