@@ -23,7 +23,7 @@
 //!     result.push(format!("Calling handler for node {}: {}", index, node))
 //! }, |index, node, result| {
 //!     result.push(format!("Finished handling node {} and all it's children", index))
-//! }, &mut result);//!
+//! }, &mut result);
 //! assert_eq!(result, vec![
 //!     "Calling handler for node 0: 0",
 //!     "Calling handler for node 1: 1",
