@@ -128,9 +128,7 @@ impl<T> Tree<T> {
 
     /// Adds a child node with the given data to the root node and returns the child's index.
     pub fn add_child_to_root(&mut self, data: T) -> usize {
-        let index = self.add_child(0, data);
-
-        index
+        self.add_child(0, data)
     }
 
     /// Returns a reference to the data of the node at the given index, or `None` if the index is
