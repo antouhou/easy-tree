@@ -1,9 +1,45 @@
 //! A simple tree structure library for Rust.
 //!
-//! This library provides a basic implementation of a tree structure where each node can have multiple children and a single parent.
+//! `easy-tree` is a simple and efficient tree structure library for Rust. It allows you to create and manipulate tree
+//! structures where each node can have multiple children and a single parent. `easy-tree` also supports recursively
+//! traversing the tree in a depth-first manner, with two callbacks: one before processing any children and one after
+//! processing the subtree belonging to that node (meaning children, and their children, and so on).
 //!
 //! # Examples
 //!
+//! ## Traverse a tree
+//! ```
+//! use easy_tree::Tree;
+//!
+//! fn main() {
+//!     let mut tree = Tree::new();
+//!     let root = tree.add_node(0); // Root node with data 0
+//!     let child1 = tree.add_child(root, 1); // Child node with data 1
+//!     let child2 = tree.add_child(root, 2); // Child node with data 2
+//!     let child3 = tree.add_child(child1, 3); // Child node with data 3
+//!
+//!     let mut result = vec![];
+//!
+//!     tree.traverse(|index, node, result| {
+//!         result.push(format!("Calling handler for node {}: {}", index, node))
+//!     }, |index, node, result| {
+//!         result.push(format!("Finished handling node {} and all it's children", index))
+//!     }, &mut result);
+//!
+//!     assert_eq!(result, vec![
+//!         "Calling handler for node 0: 0",
+//!         "Calling handler for node 1: 1",
+//!         "Calling handler for node 3: 3",
+//!         "Finished handling node 3 and all it's children",
+//!         "Finished handling node 1 and all it's children",
+//!         "Calling handler for node 2: 2",
+//!         "Finished handling node 2 and all it's children",
+//!         "Finished handling node 0 and all it's children",
+//!     ]);
+//! }
+//! ```
+//!
+//! ## Iterate over the nodes in a tree
 //! ```
 //! use easy_tree::Tree;
 //!
@@ -30,6 +66,7 @@
 //! assert_eq!(tree.children(child3), &[]);
 //! ```
 //!
+//! ## Modify the nodes in a tree
 //! ```
 //! use easy_tree::Tree;
 //!
