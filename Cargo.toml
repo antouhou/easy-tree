@@ -1,6 +1,6 @@
 [package]
 name = "easy-tree"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Anton Suprunchuk <anton.suprunchuk@gmail.com>"]
 edition = "2021"
 description = "A simple and efficient tree structure library for Rust with recursive traversal"
