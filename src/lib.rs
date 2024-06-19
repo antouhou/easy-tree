@@ -209,6 +209,10 @@ impl<T> Tree<T> {
         mut after_processing_the_subtree: impl FnMut(usize, &'a T, &mut S),
         s: &mut S,
     ) {
+        if self.is_empty() {
+            return;
+        }
+
         let mut stack = vec![(0, false)];
 
         while let Some((index, children_visited)) = stack.pop() {
