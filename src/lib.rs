@@ -23,50 +23,46 @@
 //!
 //! ## 1. Basic Tree Operations
 //! ```rust
-//! use easy_tree::Tree;
+//!  use easy_tree::Tree;
 //!
-//! fn main() {
-//!     let mut tree = Tree::new();
-//!     let root = tree.add_node("root");
-//!     let child1 = tree.add_child(root, "child1");
-//!     let child2 = tree.add_child(root, "child2");
-//!     let grandchild = tree.add_child(child1, "grandchild");
+//!  let mut tree = Tree::new();
+//!  let root = tree.add_node("root");
+//!  let child1 = tree.add_child(root, "child1");
+//!  let child2 = tree.add_child(root, "child2");
+//!  let grandchild = tree.add_child(child1, "grandchild");
 //!
-//!     assert_eq!(tree.get(root), Some(&"root"));
-//!     assert_eq!(tree.get(grandchild), Some(&"grandchild"));
-//!     assert_eq!(tree.children(root), &[child1, child2]);
-//!     assert_eq!(tree.parent_index_unchecked(grandchild), Some(child1));
-//! }
+//!  assert_eq!(tree.get(root), Some(&"root"));
+//!  assert_eq!(tree.get(grandchild), Some(&"grandchild"));
+//!  assert_eq!(tree.children(root), &[child1, child2]);
+//!  assert_eq!(tree.parent_index_unchecked(grandchild), Some(child1));
 //! ```
 //!
 //! ## 2. Depth-First Traversal
 //! Process nodes before and after their children using callbacks.
 //!
 //! ```rust
-//! use easy_tree::Tree;
+//!  use easy_tree::Tree;
 //!
-//! fn main() {
-//!     let mut tree = Tree::new();
-//!     let root = tree.add_node("root");
-//!     let child1 = tree.add_child(root, "child1");
-//!     let child2 = tree.add_child(root, "child2");
+//!  let mut tree = Tree::new();
+//!  let root = tree.add_node("root");
+//!  let child1 = tree.add_child(root, "child1");
+//!  let child2 = tree.add_child(root, "child2");
 //!
-//!     let mut result = vec![];
-//!     tree.traverse(
-//!         |idx, data, result| result.push(format!("Entering node {}: {}", idx, data)),
-//!         |idx, data, result| result.push(format!("Leaving node {}: {}", idx, data)),
-//!         &mut result,
-//!     );
+//!  let mut result = vec![];
+//!  tree.traverse(
+//!     |idx, data, result| result.push(format!("Entering node {}: {}", idx, data)),
+//!     |idx, data, result| result.push(format!("Leaving node {}: {}", idx, data)),
+//!     &mut result,
+//!  );
 //!
-//!     assert_eq!(result, vec![
-//!         "Entering node 0: root",
-//!         "Entering node 1: child1",
-//!         "Leaving node 1: child1",
-//!         "Entering node 2: child2",
-//!         "Leaving node 2: child2",
-//!         "Leaving node 0: root",
-//!     ]);
-//! }
+//!  assert_eq!(result, vec![
+//!     "Entering node 0: root",
+//!     "Entering node 1: child1",
+//!     "Leaving node 1: child1",
+//!     "Entering node 2: child2",
+//!     "Leaving node 2: child2",
+//!     "Leaving node 0: root",
+//!  ]);
 //! ```
 //!
 //! ## 3. Iteration
@@ -74,22 +70,20 @@
 //! Iterate over nodes and modify their data.
 //!
 //! ```rust
-//! use easy_tree::Tree;
+//!  use easy_tree::Tree;
 //!
-//! fn main() {
-//!     let mut tree = Tree::new();
-//!     let root = tree.add_node(0);
-//!     let child1 = tree.add_child(root, 1);
-//!     let child2 = tree.add_child(root, 2);
+//!  let mut tree = Tree::new();
+//!  let root = tree.add_node(0);
+//!  let child1 = tree.add_child(root, 1);
+//!  let child2 = tree.add_child(root, 2);
 //!
-//!     for (idx, data) in tree.iter_mut() {
-//!         *data += 10;
-//!     }
+//!  for (idx, data) in tree.iter_mut() {
+//!     *data += 10;
+//!  }
 //!
-//!     assert_eq!(tree.get(root), Some(&10));
-//!     assert_eq!(tree.get(child1), Some(&11));
-//!     assert_eq!(tree.get(child2), Some(&12));
-//! }
+//!  assert_eq!(tree.get(root), Some(&10));
+//!  assert_eq!(tree.get(child1), Some(&11));
+//!  assert_eq!(tree.get(child2), Some(&12));
 //! ```
 //!
 //! ## 4. Parallel Iteration (Optional)
@@ -421,7 +415,6 @@ impl<T> Tree<T> {
     pub fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         &mut self.nodes[index].data
     }
-
 
     /// Returns the parent index of a node, if it has a parent.
     ///

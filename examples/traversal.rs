@@ -4,8 +4,8 @@ fn main() {
     let mut tree = Tree::new();
     let root = tree.add_node("root");
     let child1 = tree.add_child(root, "child1");
-    let grandchild1 = tree.add_child(child1, "grandchild1");
-    let child2 = tree.add_child(root, "child2");
+    let _grandchild1 = tree.add_child(child1, "grandchild1");
+    let _child2 = tree.add_child(root, "child2");
 
     let mut log = vec![];
     tree.traverse(
