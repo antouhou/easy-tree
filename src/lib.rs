@@ -127,6 +127,8 @@ impl<T> Node<T> {
 /// A tree structure containing nodes.
 pub struct Tree<T> {
     nodes: Vec<Node<T>>,
+    /// Stack for traverse_mut to avoid allocations
+    stack: Vec<(usize, bool)>,
 }
 
 impl<T> Default for Tree<T> {
@@ -138,7 +140,10 @@ impl<T> Default for Tree<T> {
 impl<T> Tree<T> {
     /// Creates a new empty tree.
     pub fn new() -> Self {
-        Self { nodes: Vec::new() }
+        Self {
+            nodes: Vec::new(),
+            stack: Vec::new(),
+        }
     }
 
     /// Adds a new node with the given data to the tree and returns its index. The nodes
@@ -231,6 +236,42 @@ impl<T> Tree<T> {
                 // Push all children onto the stack
                 for &child in node.children.iter().rev() {
                     stack.push((child, false));
+                }
+            }
+        }
+    }
+
+    /// Walks the tree recursively, applying the given functions before and after processing the
+    /// children of each node. This version allows for mutable access to the nodes.
+    pub fn traverse_mut<S>(
+        &mut self,
+        mut before_processing_children: impl FnMut(usize, &mut T, &mut S),
+        mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
+        s: &mut S,
+    ) {
+        if self.is_empty() {
+            return;
+        }
+
+        self.stack.clear();
+        self.stack.push((0, false));
+
+        while let Some((index, children_visited)) = self.stack.pop() {
+            if children_visited {
+                // All children are processed, call f2
+                let node = &mut self.nodes[index];
+                after_processing_the_subtree(index, &mut node.data, s);
+            } else {
+                // Call f and mark this node's children for processing
+                let node = &mut self.nodes[index];
+                before_processing_children(index, &mut node.data, s);
+
+                // Re-push the current node with children_visited set to true
+                self.stack.push((index, true));
+
+                // Push all children onto the stack
+                for &child in node.children.iter().rev() {
+                    self.stack.push((child, false));
                 }
             }
         }
@@ -360,12 +401,11 @@ mod tests {
 
         tree.traverse(
             |index, node, result| {
-                result.push(format!("Calling handler for node {}: {}", index, node))
+                result.push(format!("Calling handler for node {index}: {node}"))
             },
             |index, _node, result| {
                 result.push(format!(
-                    "Finished handling node {} and all it's children",
-                    index
+                    "Finished handling node {index} and all it's children"
                 ))
             },
             &mut result,
