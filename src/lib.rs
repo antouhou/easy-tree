@@ -687,12 +687,10 @@ mod tests {
         let mut result = vec![];
 
         tree.traverse(
-            |index, node, result| {
-                result.push(format!("Calling handler for node {index}: {node}"))
-            },
+            |index, node, result| result.push(format!("Calling handler for node {index}: {node}")),
             |index, _node, result| {
                 result.push(format!(
-                    "Finished handling node {index} and all it's children"
+                    "Finished handling node {index} and all its children"
                 ))
             },
             &mut result,
