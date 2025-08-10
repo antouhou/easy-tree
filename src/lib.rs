@@ -702,11 +702,11 @@ mod tests {
                 "Calling handler for node 0: 0",
                 "Calling handler for node 1: 1",
                 "Calling handler for node 3: 3",
-                "Finished handling node 3 and all it's children",
-                "Finished handling node 1 and all it's children",
+                "Finished handling node 3 and all its children",
+                "Finished handling node 1 and all its children",
                 "Calling handler for node 2: 2",
-                "Finished handling node 2 and all it's children",
-                "Finished handling node 0 and all it's children",
+                "Finished handling node 2 and all its children",
+                "Finished handling node 0 and all its children",
             ]
         );
     }
