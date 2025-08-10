@@ -7,7 +7,7 @@ description = "A simple and efficient tree structure library for Rust with recur
 homepage = "https://github.com/antouhou/easy-tree"
 repository = "https://github.com/antouhou/easy-tree"
 license = "MIT"
-keywords = ["tree", "traversal", "data_structure", "hierarchical", "recursive"]
+keywords = ["tree", "traversal", "data_structure", "hierarchical", "depth_first"]
 categories = ["data-structures", "algorithms"]
 readme = "README.md"
 
