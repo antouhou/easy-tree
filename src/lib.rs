@@ -536,12 +536,30 @@ impl<T> Tree<T> {
         mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
         s: &mut S,
     ) {
-        if self.is_empty() {
+        self.traverse_subtree_mut(
+            0,
+            &mut before_processing_children,
+            &mut after_processing_the_subtree,
+            s,
+        )
+    }
+
+    /// Walks the tree recursively starting from a specific node, applying the given functions
+    /// before and after processing the children of each node. This version allows for mutable
+    /// access to the nodes. Skips
+    pub fn traverse_subtree_mut<S>(
+        &mut self,
+        start: usize,
+        mut before_processing_children: impl FnMut(usize, &mut T, &mut S),
+        mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
+        s: &mut S,
+    ) {
+        if self.is_empty() || self.nodes.get(start).is_none() {
             return;
         }
 
         self.stack.clear();
-        self.stack.push((0, false));
+        self.stack.push((start, false));
 
         while let Some((index, children_visited)) = self.stack.pop() {
             if children_visited {
