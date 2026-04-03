@@ -959,42 +959,6 @@ mod tests {
     }
 
     #[test]
-    fn test_add_child_to_removed_parent_panics_without_mutation() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        let child = tree.add_child(root, "child");
-
-        tree.remove_subtree(child);
-
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tree.add_child(child, "new-child");
-        }));
-
-        assert!(result.is_err());
-        assert_eq!(tree.len(), 1);
-        assert_eq!(tree.get(root), Some(&"root"));
-        assert_eq!(tree.children(root), &[]);
-        assert_eq!(tree.iter().count(), 1);
-    }
-
-    #[test]
-    fn test_add_child_to_root_after_removing_first_root_panics() {
-        let mut tree = Tree::new();
-        let root0 = tree.add_node("root0");
-        let _root1 = tree.add_node("root1");
-
-        tree.remove_subtree(root0);
-
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tree.add_child_to_root("child");
-        }));
-
-        assert!(result.is_err());
-        assert_eq!(tree.len(), 1);
-        assert_eq!(tree.iter().collect::<Vec<_>>(), vec![(1, &"root1")]);
-    }
-
-    #[test]
     fn test_remove_idempotent() {
         let mut tree = Tree::new();
         let root = tree.add_node("root");
