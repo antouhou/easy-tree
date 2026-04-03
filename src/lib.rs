@@ -296,6 +296,10 @@ impl<T> Tree<T> {
     /// let child = tree.add_child(root, "child");
     /// ```
     pub fn add_child(&mut self, parent: usize, data: T) -> usize {
+        assert!(
+            matches!(self.nodes.get(parent), Some(Some(_))),
+            "parent node does not exist"
+        );
         let index = self.add_node(data);
         self.nodes[parent].as_mut().unwrap().add_child(index);
         self.nodes[index].as_mut().unwrap().set_parent(parent);
@@ -319,6 +323,10 @@ impl<T> Tree<T> {
     /// let child = tree.add_child_to_root("child");
     /// ```
     pub fn add_child_to_root(&mut self, data: T) -> usize {
+        assert!(
+            matches!(self.nodes.first(), Some(Some(_))),
+            "tree root does not exist"
+        );
         self.add_child(0, data)
     }
 
@@ -339,7 +347,9 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.get(root), Some(&42));
     /// ```
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.nodes.get(index).and_then(|slot| slot.as_ref().map(|node| &node.data))
+        self.nodes
+            .get(index)
+            .and_then(|slot| slot.as_ref().map(|node| &node.data))
     }
 
     /// Retrieves a reference to the data stored in a node without bounds checking.
@@ -394,7 +404,9 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.get(root), Some(&43));
     /// ```
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.nodes.get_mut(index).and_then(|slot| slot.as_mut().map(|node| &mut node.data))
+        self.nodes
+            .get_mut(index)
+            .and_then(|slot| slot.as_mut().map(|node| &mut node.data))
     }
 
     /// Retrieves a mutable reference to the data stored in a node without bounds checking.
@@ -513,7 +525,7 @@ impl<T> Tree<T> {
         mut after_processing_the_subtree: impl FnMut(usize, &'a T, &mut S),
         s: &mut S,
     ) {
-        if self.is_empty() {
+        if !matches!(self.nodes.first(), Some(Some(_))) {
             return;
         }
 
@@ -547,12 +559,14 @@ impl<T> Tree<T> {
         mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
         s: &mut S,
     ) {
-        self.traverse_subtree_mut(
-            0,
-            &mut before_processing_children,
-            &mut after_processing_the_subtree,
-            s,
-        )
+        if matches!(self.nodes.first(), Some(Some(_))) {
+            self.traverse_subtree_mut(
+                0,
+                &mut before_processing_children,
+                &mut after_processing_the_subtree,
+                s,
+            );
+        }
     }
 
     /// Walks the tree recursively starting from a specific node, applying the given functions
@@ -907,6 +921,85 @@ mod tests {
             result,
             vec!["enter 0:0", "enter 2:2", "leave 2:2", "leave 0:0",]
         );
+    }
+
+    #[test]
+    fn test_traverse_after_removing_first_root() {
+        let mut tree = Tree::new();
+        let root0 = tree.add_node("root0");
+        let root1 = tree.add_node("root1");
+        tree.add_child(root1, "child");
+
+        tree.remove_subtree(root0);
+
+        let mut result = vec![];
+        tree.traverse(
+            |idx, data, result: &mut Vec<String>| result.push(format!("enter {idx}:{data}")),
+            |idx, data, result: &mut Vec<String>| result.push(format!("leave {idx}:{data}")),
+            &mut result,
+        );
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_traverse_mut_after_removing_first_root() {
+        let mut tree = Tree::new();
+        let root0 = tree.add_node(0);
+        let root1 = tree.add_node(10);
+        let child = tree.add_child(root1, 20);
+
+        tree.remove_subtree(root0);
+
+        let mut visited = vec![];
+        tree.traverse_mut(
+            |idx, data, visited: &mut Vec<(usize, i32)>| {
+                *data += 1;
+                visited.push((idx, *data));
+            },
+            |_, _, _| {},
+            &mut visited,
+        );
+
+        assert!(visited.is_empty());
+        assert_eq!(tree.get(root1), Some(&10));
+        assert_eq!(tree.get(child), Some(&20));
+    }
+
+    #[test]
+    fn test_add_child_to_removed_parent_panics_without_mutation() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        let child = tree.add_child(root, "child");
+
+        tree.remove_subtree(child);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tree.add_child(child, "new-child");
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.get(root), Some(&"root"));
+        assert_eq!(tree.children(root), &[]);
+        assert_eq!(tree.iter().count(), 1);
+    }
+
+    #[test]
+    fn test_add_child_to_root_after_removing_first_root_panics() {
+        let mut tree = Tree::new();
+        let root0 = tree.add_node("root0");
+        let _root1 = tree.add_node("root1");
+
+        tree.remove_subtree(root0);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            tree.add_child_to_root("child");
+        }));
+
+        assert!(result.is_err());
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.iter().collect::<Vec<_>>(), vec![(1, &"root1")]);
     }
 
     #[test]
