@@ -296,10 +296,6 @@ impl<T> Tree<T> {
     /// let child = tree.add_child(root, "child");
     /// ```
     pub fn add_child(&mut self, parent: usize, data: T) -> usize {
-        assert!(
-            matches!(self.nodes.get(parent), Some(Some(_))),
-            "parent node does not exist"
-        );
         let index = self.add_node(data);
         self.nodes[parent].as_mut().unwrap().add_child(index);
         self.nodes[index].as_mut().unwrap().set_parent(parent);
@@ -323,10 +319,6 @@ impl<T> Tree<T> {
     /// let child = tree.add_child_to_root("child");
     /// ```
     pub fn add_child_to_root(&mut self, data: T) -> usize {
-        assert!(
-            matches!(self.nodes.first(), Some(Some(_))),
-            "tree root does not exist"
-        );
         self.add_child(0, data)
     }
 
