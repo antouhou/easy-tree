@@ -212,7 +212,11 @@ impl<T> Node<T> {
 /// ```
 #[derive(Clone)]
 pub struct Tree<T> {
-    nodes: Vec<Node<T>>,
+    nodes: Vec<Option<Node<T>>>,
+    /// Indices of removed nodes available for reuse.
+    free_list: Vec<usize>,
+    /// Number of live (non-removed) nodes.
+    node_count: usize,
     /// Stack for traverse_mut to avoid allocations
     stack: Vec<(usize, bool)>,
 }
@@ -238,6 +242,8 @@ impl<T> Tree<T> {
     pub fn new() -> Self {
         Self {
             nodes: Vec::new(),
+            free_list: Vec::new(),
+            node_count: 0,
             stack: Vec::new(),
         }
     }
@@ -261,9 +267,15 @@ impl<T> Tree<T> {
     /// ```
     pub fn add_node(&mut self, data: T) -> usize {
         let node = Node::new(data);
-        let index = self.nodes.len();
-        self.nodes.push(node);
-        index
+        self.node_count += 1;
+        if let Some(index) = self.free_list.pop() {
+            self.nodes[index] = Some(node);
+            index
+        } else {
+            let index = self.nodes.len();
+            self.nodes.push(Some(node));
+            index
+        }
     }
 
     /// Adds a child node to an existing node in the tree.
@@ -285,8 +297,8 @@ impl<T> Tree<T> {
     /// ```
     pub fn add_child(&mut self, parent: usize, data: T) -> usize {
         let index = self.add_node(data);
-        self.nodes[parent].add_child(index);
-        self.nodes[index].set_parent(parent);
+        self.nodes[parent].as_mut().unwrap().add_child(index);
+        self.nodes[index].as_mut().unwrap().set_parent(parent);
         index
     }
 
@@ -327,7 +339,7 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.get(root), Some(&42));
     /// ```
     pub fn get(&self, index: usize) -> Option<&T> {
-        self.nodes.get(index).map(|node| &node.data)
+        self.nodes.get(index).and_then(|slot| slot.as_ref().map(|node| &node.data))
     }
 
     /// Retrieves a reference to the data stored in a node without bounds checking.
@@ -361,7 +373,7 @@ impl<T> Tree<T> {
     /// ```
     #[inline(always)]
     pub fn get_unchecked(&self, index: usize) -> &T {
-        &self.nodes[index].data
+        &self.nodes[index].as_ref().unwrap().data
     }
 
     /// Retrieves a mutable reference to the data stored in a node.
@@ -382,7 +394,7 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.get(root), Some(&43));
     /// ```
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        self.nodes.get_mut(index).map(|node| &mut node.data)
+        self.nodes.get_mut(index).and_then(|slot| slot.as_mut().map(|node| &mut node.data))
     }
 
     /// Retrieves a mutable reference to the data stored in a node without bounds checking.
@@ -418,7 +430,7 @@ impl<T> Tree<T> {
     /// ```
     #[inline(always)]
     pub fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
-        &mut self.nodes[index].data
+        &mut self.nodes[index].as_mut().unwrap().data
     }
 
     /// Returns the parent index of a node, if it has a parent.
@@ -442,7 +454,7 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.parent_index_unchecked(child), Some(root));
     /// ```
     pub fn parent_index_unchecked(&self, index: usize) -> Option<usize> {
-        self.nodes[index].parent
+        self.nodes[index].as_ref().unwrap().parent
     }
 
     /// Returns a slice of the indices of the children of a node.
@@ -466,7 +478,7 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.children(root), &[child]);
     /// ```
     pub fn children(&self, index: usize) -> &[usize] {
-        &self.nodes[index].children
+        &self.nodes[index].as_ref().unwrap().children
     }
 
     /// Traverses the tree in a depth-first manner.
@@ -508,13 +520,12 @@ impl<T> Tree<T> {
         let mut stack = vec![(0, false)];
 
         while let Some((index, children_visited)) = stack.pop() {
+            let node = self.nodes[index].as_ref().unwrap();
             if children_visited {
                 // All children are processed, call f2
-                let node = &self.nodes[index];
                 after_processing_the_subtree(index, &node.data, s);
             } else {
                 // Call f and mark this node's children for processing
-                let node = &self.nodes[index];
                 before_processing_children(index, &node.data, s);
 
                 // Re-push the current node with children_visited set to true
@@ -546,7 +557,7 @@ impl<T> Tree<T> {
 
     /// Walks the tree recursively starting from a specific node, applying the given functions
     /// before and after processing the children of each node. This version allows for mutable
-    /// access to the nodes. Skips
+    /// access to the nodes.
     pub fn traverse_subtree_mut<S>(
         &mut self,
         start: usize,
@@ -554,7 +565,7 @@ impl<T> Tree<T> {
         mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
         s: &mut S,
     ) {
-        if self.is_empty() || self.nodes.get(start).is_none() {
+        if self.is_empty() || self.nodes.get(start).and_then(|n| n.as_ref()).is_none() {
             return;
         }
 
@@ -564,11 +575,11 @@ impl<T> Tree<T> {
         while let Some((index, children_visited)) = self.stack.pop() {
             if children_visited {
                 // All children are processed, call f2
-                let node = &mut self.nodes[index];
+                let node = self.nodes[index].as_mut().unwrap();
                 after_processing_the_subtree(index, &mut node.data, s);
             } else {
                 // Call f and mark this node's children for processing
-                let node = &mut self.nodes[index];
+                let node = self.nodes[index].as_mut().unwrap();
                 before_processing_children(index, &mut node.data, s);
 
                 // Re-push the current node with children_visited set to true
@@ -587,7 +598,7 @@ impl<T> Tree<T> {
         self.nodes
             .iter()
             .enumerate()
-            .map(|(index, node)| (index, &node.data))
+            .filter_map(|(index, slot)| slot.as_ref().map(|node| (index, &node.data)))
     }
 
     /// Returns a mutable iterator over the indices and data of the nodes in the tree.
@@ -595,22 +606,85 @@ impl<T> Tree<T> {
         self.nodes
             .iter_mut()
             .enumerate()
-            .map(|(index, node)| (index, &mut node.data))
+            .filter_map(|(index, slot)| slot.as_mut().map(|node| (index, &mut node.data)))
     }
 
     /// Returns `true` if the tree contains no nodes.
     pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
+        self.node_count == 0
     }
 
     /// Returns the number of nodes in the tree.
     pub fn len(&self) -> usize {
-        self.nodes.len()
+        self.node_count
     }
 
     /// Removes all nodes from the tree.
     pub fn clear(&mut self) {
         self.nodes.clear();
+        self.free_list.clear();
+        self.node_count = 0;
+    }
+
+    /// Removes a node and all of its descendants from the tree.
+    ///
+    /// The removed node is detached from its parent, and all indices occupied by the
+    /// removed nodes are added to an internal free list for reuse by future
+    /// [`add_node`](Tree::add_node) or [`add_child`](Tree::add_child) calls.
+    ///
+    /// If `index` is out of bounds or refers to a previously removed node, this method
+    /// is a no-op.
+    ///
+    /// # Parameters
+    /// - `index`: The index of the root of the subtree to remove.
+    ///
+    /// # Example
+    /// ```rust
+    /// use easy_tree::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// let root = tree.add_node("root");
+    /// let child1 = tree.add_child(root, "child1");
+    /// let child2 = tree.add_child(root, "child2");
+    /// let grandchild = tree.add_child(child1, "grandchild");
+    ///
+    /// assert_eq!(tree.len(), 4);
+    ///
+    /// tree.remove_subtree(child1);
+    ///
+    /// assert_eq!(tree.len(), 2);
+    /// assert_eq!(tree.get(child1), None);
+    /// assert_eq!(tree.get(grandchild), None);
+    /// assert_eq!(tree.children(root), &[child2]);
+    /// ```
+    pub fn remove_subtree(&mut self, index: usize) {
+        if !matches!(self.nodes.get(index), Some(Some(_))) {
+            return;
+        }
+
+        // Detach from parent
+        if let Some(parent_idx) = self.nodes[index].as_ref().unwrap().parent {
+            if let Some(parent) = self.nodes[parent_idx].as_mut() {
+                parent.children.retain(|&child| child != index);
+            }
+        }
+
+        // Remove all nodes in the subtree via iterative DFS
+        let mut removal_stack = vec![index];
+        while let Some(current) = removal_stack.pop() {
+            if let Some(node) = self.nodes[current].take() {
+                removal_stack.extend(node.children);
+                self.free_list.push(current);
+                self.node_count -= 1;
+            }
+        }
+
+        // Reset storage when the tree becomes empty, so the next add_node
+        // starts fresh from index 0.
+        if self.node_count == 0 {
+            self.nodes.clear();
+            self.free_list.clear();
+        }
     }
 }
 
@@ -622,7 +696,7 @@ impl<T: Send + Sync> Tree<T> {
         self.nodes
             .par_iter()
             .enumerate()
-            .map(|(index, node)| (index, &node.data))
+            .filter_map(|(index, slot)| slot.as_ref().map(|node| (index, &node.data)))
     }
 
     #[cfg(feature = "rayon")]
@@ -631,7 +705,7 @@ impl<T: Send + Sync> Tree<T> {
         self.nodes
             .par_iter_mut()
             .enumerate()
-            .map(|(index, node)| (index, &mut node.data))
+            .filter_map(|(index, slot)| slot.as_mut().map(|node| (index, &mut node.data)))
     }
 }
 
@@ -727,5 +801,150 @@ mod tests {
                 "Finished handling node 0 and all its children",
             ]
         );
+    }
+
+    #[test]
+    fn test_remove_subtree() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        let child1 = tree.add_child(root, "child1");
+        let child2 = tree.add_child(root, "child2");
+        let grandchild1 = tree.add_child(child1, "grandchild1");
+        let _grandchild2 = tree.add_child(child1, "grandchild2");
+
+        assert_eq!(tree.len(), 5);
+
+        tree.remove_subtree(child1);
+
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree.get(root), Some(&"root"));
+        assert_eq!(tree.get(child1), None);
+        assert_eq!(tree.get(child2), Some(&"child2"));
+        assert_eq!(tree.get(grandchild1), None);
+        assert_eq!(tree.children(root), &[child2]);
+    }
+
+    #[test]
+    fn test_remove_leaf_node() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        let child1 = tree.add_child(root, "child1");
+        let child2 = tree.add_child(root, "child2");
+
+        tree.remove_subtree(child1);
+
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree.get(child1), None);
+        assert_eq!(tree.children(root), &[child2]);
+    }
+
+    #[test]
+    fn test_remove_root() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        tree.add_child(root, "child1");
+        tree.add_child(root, "child2");
+
+        tree.remove_subtree(root);
+
+        assert!(tree.is_empty());
+        assert_eq!(tree.len(), 0);
+    }
+
+    #[test]
+    fn test_remove_and_reuse() {
+        let mut tree = Tree::new();
+        let root = tree.add_node(0);
+        let child1 = tree.add_child(root, 1);
+        tree.add_child(root, 2);
+        tree.add_child(child1, 3);
+
+        // Remove child1 subtree (indices 1 and 3)
+        tree.remove_subtree(child1);
+
+        // Add new nodes — should reuse freed indices
+        let new_child = tree.add_child(root, 10);
+        assert!(new_child == 3 || new_child == 1);
+
+        assert_eq!(tree.len(), 3);
+        assert_eq!(tree.get(new_child), Some(&10));
+    }
+
+    #[test]
+    fn test_iter_after_remove() {
+        let mut tree = Tree::new();
+        let root = tree.add_node(0);
+        let child1 = tree.add_child(root, 1);
+        let child2 = tree.add_child(root, 2);
+        tree.add_child(child1, 3);
+
+        tree.remove_subtree(child1);
+
+        let items: Vec<_> = tree.iter().collect();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0], (root, &0));
+        assert_eq!(items[1], (child2, &2));
+    }
+
+    #[test]
+    fn test_traverse_after_remove() {
+        let mut tree = Tree::new();
+        let root = tree.add_node(0);
+        let child1 = tree.add_child(root, 1);
+        tree.add_child(root, 2);
+        tree.add_child(child1, 3);
+
+        tree.remove_subtree(child1);
+
+        let mut result = vec![];
+        tree.traverse(
+            |idx, data, result: &mut Vec<String>| result.push(format!("enter {idx}:{data}")),
+            |idx, data, result: &mut Vec<String>| result.push(format!("leave {idx}:{data}")),
+            &mut result,
+        );
+
+        assert_eq!(
+            result,
+            vec!["enter 0:0", "enter 2:2", "leave 2:2", "leave 0:0",]
+        );
+    }
+
+    #[test]
+    fn test_remove_idempotent() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        let child = tree.add_child(root, "child");
+
+        tree.remove_subtree(child);
+        tree.remove_subtree(child); // no-op
+
+        assert_eq!(tree.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_out_of_bounds() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+
+        tree.remove_subtree(999); // no-op
+
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree.get(root), Some(&"root"));
+    }
+
+    #[test]
+    fn test_add_after_remove_root() {
+        let mut tree = Tree::new();
+        let root = tree.add_node("root");
+        tree.add_child(root, "child");
+
+        tree.remove_subtree(root);
+        assert!(tree.is_empty());
+
+        // New root should start fresh at index 0
+        let new_root = tree.add_node("new_root");
+        assert_eq!(new_root, 0);
+        assert_eq!(tree.get(new_root), Some(&"new_root"));
+        assert_eq!(tree.len(), 1);
     }
 }
