@@ -1,4 +1,6 @@
 use easy_tree::Tree;
+#[cfg(feature = "rayon")]
+use easy_tree::rayon::iter::ParallelIterator;
 
 fn main() {
     let mut tree = Tree::new();

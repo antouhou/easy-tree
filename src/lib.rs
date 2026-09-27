@@ -1,92 +1,85 @@
-//! # easy-tree
+//! A tree library with depth-first traversal and pre- and post-processing callbacks.
 //!
-//! `easy-tree` is a lightweight library for creating and manipulating tree structures in Rust.
-//! It provides a simple and efficient interface for managing hierarchical data and supports
-//! **depth-first traversal** with pre- and post-processing callbacks for flexible operations.
+//! [`Tree::traverse`] walks the tree and calls your code before and after each node's
+//! children. Both callbacks receive the same mutable state, so they can maintain a
+//! path or other context as traversal enters and leaves branches.
 //!
-//! ## Features
+//! Use [`Tree::traverse_mut`] to update node data during traversal, or
+//! [`Tree::traverse_subtree_mut`] to start from a particular node.
 //!
-//! - **Simple API**: Easily create, add, and retrieve nodes in the tree.
-//! - **Depth-first traversal**: Recursively traverse the tree with callbacks before and after processing subtrees.
-//! - **Flexible node access**: Access parent-child relationships and modify node data.
-//! - **Optional parallel iteration**: Speed up iteration with [rayon](https://docs.rs/rayon) when enabled.
+//! ## Create a tree
 //!
-//! ## Use Cases
-//!
-//! `easy-tree` is ideal for representing and traversing hierarchical data, such as:
-//! - **File systems**
-//! - **Organizational charts**
-//! - **Abstract syntax trees (ASTs)**
-//! - **Graph-like structures with one parent per node**
-//!
-//! # Examples
-//!
-//! ## 1. Basic Tree Operations
 //! ```rust
-//!  use easy_tree::Tree;
+//! use easy_tree::Tree;
 //!
-//!  let mut tree = Tree::new();
-//!  let root = tree.add_node("root");
-//!  let child1 = tree.add_child(root, "child1");
-//!  let child2 = tree.add_child(root, "child2");
-//!  let grandchild = tree.add_child(child1, "grandchild");
+//! let mut tree = Tree::new();
+//! let root = tree.add_node("root");
+//! let child1 = tree.add_child(root, "child1");
+//! let child2 = tree.add_child(root, "child2");
+//! let grandchild = tree.add_child(child1, "grandchild");
 //!
-//!  assert_eq!(tree.get(root), Some(&"root"));
-//!  assert_eq!(tree.get(grandchild), Some(&"grandchild"));
-//!  assert_eq!(tree.children(root), &[child1, child2]);
-//!  assert_eq!(tree.parent_index_unchecked(grandchild), Some(child1));
+//! assert_eq!(tree.get(root), Some(&"root"));
+//! assert_eq!(tree.get(grandchild), Some(&"grandchild"));
+//! assert_eq!(tree.children(root), &[child1, child2]);
+//! assert_eq!(tree.parent_index_unchecked(grandchild), Some(child1));
 //! ```
 //!
-//! ## 2. Depth-First Traversal
-//! Process nodes before and after their children using callbacks.
+//! ## Traverse nodes
+//!
+//! Process nodes before and after their children in a single call. This example
+//! collects both callbacks' messages in the same log.
 //!
 //! ```rust
-//!  use easy_tree::Tree;
+//! use easy_tree::Tree;
 //!
-//!  let mut tree = Tree::new();
-//!  let root = tree.add_node("root");
-//!  let child1 = tree.add_child(root, "child1");
-//!  let child2 = tree.add_child(root, "child2");
+//! let mut tree = Tree::new();
+//! let root = tree.add_node("root");
+//! let child1 = tree.add_child(root, "child1");
+//! let child2 = tree.add_child(root, "child2");
 //!
-//!  let mut result = vec![];
-//!  tree.traverse(
+//! let mut result = vec![];
+//! tree.traverse(
 //!     |idx, data, result| result.push(format!("Entering node {}: {}", idx, data)),
 //!     |idx, data, result| result.push(format!("Leaving node {}: {}", idx, data)),
 //!     &mut result,
-//!  );
+//! );
 //!
-//!  assert_eq!(result, vec![
+//! assert_eq!(result, vec![
 //!     "Entering node 0: root",
 //!     "Entering node 1: child1",
 //!     "Leaving node 1: child1",
 //!     "Entering node 2: child2",
 //!     "Leaving node 2: child2",
 //!     "Leaving node 0: root",
-//!  ]);
+//! ]);
 //! ```
 //!
-//! ## 3. Iteration
+//! [`Tree::traverse`] and [`Tree::traverse_mut`] start at index zero. They do nothing
+//! if that slot is empty, even when other disconnected roots exist.
+//! [`Tree::traverse_subtree_mut`] starts at a caller-selected index.
+//!
+//! ## Iterate over node data
 //!
 //! Iterate over nodes and modify their data.
 //!
 //! ```rust
-//!  use easy_tree::Tree;
+//! use easy_tree::Tree;
 //!
-//!  let mut tree = Tree::new();
-//!  let root = tree.add_node(0);
-//!  let child1 = tree.add_child(root, 1);
-//!  let child2 = tree.add_child(root, 2);
+//! let mut tree = Tree::new();
+//! let root = tree.add_node(0);
+//! let child1 = tree.add_child(root, 1);
+//! let child2 = tree.add_child(root, 2);
 //!
-//!  for (idx, data) in tree.iter_mut() {
+//! for (_, data) in tree.iter_mut() {
 //!     *data += 10;
-//!  }
+//! }
 //!
-//!  assert_eq!(tree.get(root), Some(&10));
-//!  assert_eq!(tree.get(child1), Some(&11));
-//!  assert_eq!(tree.get(child2), Some(&12));
+//! assert_eq!(tree.get(root), Some(&10));
+//! assert_eq!(tree.get(child1), Some(&11));
+//! assert_eq!(tree.get(child2), Some(&12));
 //! ```
 //!
-//! ## 4. Parallel Iteration (Optional)
+//! ## Iterate in parallel
 //!
 //! Use the `rayon` feature for parallel processing of nodes.
 //!
@@ -94,7 +87,7 @@
 //! #[cfg(feature = "rayon")]
 //! use easy_tree::Tree;
 //! #[cfg(feature = "rayon")]
-//! use rayon::prelude::*;
+//! use easy_tree::rayon::iter::ParallelIterator;
 //!
 //! #[cfg(feature = "rayon")]
 //! fn main() {
@@ -112,36 +105,20 @@
 //! fn main() {}
 //! ```
 //!
-//! ## API Overview
-//!
-//! - `Tree<T>`: Represents the tree structure containing nodes of type `T`.
-//! - `Node<T>`: Represents a single node in the tree.
-//! - `Tree::add_node(data: T) -> usize`: Adds a new root node.
-//! - `Tree::add_child(parent: usize, data: T) -> usize`: Adds a child node to a parent.
-//! - `Tree::traverse`: Walks the tree recursively with customizable callbacks.
-//! - `Tree::iter` / `Tree::iter_mut`: Provides immutable and mutable iterators over the nodes.
-//!
-//! ## Contributing
-//! Contributions are welcome! For more details, see the [GitHub repository](https://github.com/antouhou/easy-tree).
-//!
 //! ## License
-//! This project is licensed under the MIT License. See [LICENSE](https://github.com/antouhou/easy-tree/blob/main/LICENSE) for details.
+//!
+//! See the [MIT license](https://github.com/antouhou/easy-tree/blob/main/LICENSE.md).
 
 #[cfg(feature = "rayon")]
 pub use rayon;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
-/// Represents a single node in a tree structure.
+mod traversal;
+
+/// A node's data, child indices, and optional parent index.
 ///
-/// Each node contains:
-/// - **data**: A payload of generic type `T`.
-/// - **children**: A list of indices referring to its child nodes.
-/// - **parent**: An optional index referring to its parent node (or `None` if the node is a root).
-///
-/// Normally, you should use the `Tree::add_node` and
-/// `Tree::add_child` methods to create nodes and add them to the tree. There's no need to
-/// address `Node` directly in most cases.
+/// Use [`Tree::add_node`] or [`Tree::add_child`] to create nodes in a tree.
 #[derive(Clone)]
 pub struct Node<T> {
     data: T,
@@ -150,17 +127,12 @@ pub struct Node<T> {
 }
 
 impl<T> Node<T> {
-    /// Creates a new node with the given data. Normally, you should use the `Tree::add_node` and
-    /// `Tree::add_child` methods to create nodes and add them to the tree. There's no need to
-    /// address `Node` directly in most cases.
+    /// Creates a standalone node with no parent or children.
     ///
-    /// # Parameters
-    /// - `data`: The data to associate with this node.
-    ///
-    /// # Returns
-    /// A new `Node` instance.
+    /// Use [`Tree::add_node`] to insert data into a tree.
     ///
     /// # Example
+    ///
     /// ```
     /// use easy_tree::Node;
     ///
@@ -174,33 +146,21 @@ impl<T> Node<T> {
         }
     }
 
-    /// Adds a child to this node.
-    ///
-    /// # Parameters
-    /// - `child`: The index of the child node to add.
-    ///
-    /// # Internal Use
-    /// This method is used internally by the `Tree` struct.
     pub(crate) fn add_child(&mut self, child: usize) {
         self.children.push(child);
     }
 
-    /// Sets the parent for this node.
-    ///
-    /// # Parameters
-    /// - `parent`: The index of the parent node to set.
-    ///
-    /// # Internal Use
-    /// This method is used internally by the `Tree` struct.
     pub(crate) fn set_parent(&mut self, parent: usize) {
         self.parent = Some(parent);
     }
 }
 
-/// A tree structure containing multiple nodes of generic type `T`.
+/// A tree with depth-first traversal and callbacks before and after each node's children.
 ///
-/// Each node in the tree is indexed by its position in the internal vector.
-/// The tree supports operations for adding, accessing, and traversing nodes.
+/// [`Tree::traverse`] runs both callbacks in one walk through the tree. They share
+/// mutable state, so one can extend a path on entry and the other can shorten it
+/// on exit. [`Tree::traverse_mut`] also lets callbacks modify node data, and
+/// [`Tree::traverse_subtree_mut`] starts at a chosen node.
 ///
 /// # Example
 /// ```rust
@@ -210,30 +170,27 @@ impl<T> Node<T> {
 /// let root = tree.add_node("root");
 /// let child = tree.add_child(root, "child");
 /// ```
+///
+/// # Node indices
+///
+/// Insertions can reuse removed indices, so an old index may refer to a different
+/// node. [`Tree::len`] counts live nodes rather than the range of valid indices.
 #[derive(Clone)]
 pub struct Tree<T> {
     nodes: Vec<Option<Node<T>>>,
     /// Indices of removed nodes available for reuse.
     free_list: Vec<usize>,
-    /// Number of live (non-removed) nodes.
+    /// Number of live nodes.
     node_count: usize,
-    /// Stack for traverse_mut to avoid allocations
-    stack: Vec<(usize, bool)>,
-}
-
-impl<T> Default for Tree<T> {
-    fn default() -> Self {
-        Self::new()
-    }
+    /// Retains stack capacity between mutable traversals.
+    traversal_stack: Vec<(usize, bool)>,
 }
 
 impl<T> Tree<T> {
     /// Creates a new, empty tree.
     ///
-    /// # Returns
-    /// A `Tree` instance with no nodes.
-    ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -244,21 +201,17 @@ impl<T> Tree<T> {
             nodes: Vec::new(),
             free_list: Vec::new(),
             node_count: 0,
-            stack: Vec::new(),
+            traversal_stack: Vec::new(),
         }
     }
 
-    /// Adds a new node to the tree.
+    /// Adds a node with no parent and returns its index.
     ///
-    /// This method is typically used to add a root node or a disconnected node.
-    ///
-    /// # Parameters
-    /// - `data`: The data to associate with the new node.
-    ///
-    /// # Returns
-    /// The index of the newly added node.
+    /// Reuses a vacant slot when available. The first insertion into an empty
+    /// tree uses index zero.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -278,21 +231,19 @@ impl<T> Tree<T> {
         }
     }
 
-    /// Returns id of the next node to be inserted
+    /// Returns the index that the next insertion will use.
     pub fn next_node_id(&self) -> usize {
         self.free_list.last().copied().unwrap_or(self.nodes.len())
     }
 
-    /// Adds a child node to an existing node in the tree.
+    /// Adds a child to an existing node and returns the child's index.
     ///
-    /// # Parameters
-    /// - `parent`: The index of the parent node.
-    /// - `data`: The data to associate with the new child node.
+    /// # Panics
     ///
-    /// # Returns
-    /// The index of the newly added child node.
+    /// Panics before changing the tree if `parent` is out of bounds or removed.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -301,21 +252,24 @@ impl<T> Tree<T> {
     /// let child = tree.add_child(root, "child");
     /// ```
     pub fn add_child(&mut self, parent: usize, data: T) -> usize {
+        assert!(
+            matches!(self.nodes.get(parent), Some(Some(_))),
+            "parent node does not exist"
+        );
         let index = self.add_node(data);
         self.nodes[parent].as_mut().unwrap().add_child(index);
         self.nodes[index].as_mut().unwrap().set_parent(parent);
         index
     }
 
-    /// Adds a child node to the tree root.
+    /// Adds a child to the node at index zero and returns the child's index.
     ///
-    /// # Parameters
-    /// - `data`: The data to associate with the new child node.
+    /// # Panics
     ///
-    /// # Returns
-    /// The index of the newly added child node.
+    /// Panics before changing the tree if index zero has no node.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -327,15 +281,10 @@ impl<T> Tree<T> {
         self.add_child(0, data)
     }
 
-    /// Retrieves a reference to the data stored in a node.
-    ///
-    /// # Parameters
-    /// - `index`: The index of the node to access.
-    ///
-    /// # Returns
-    /// `Some(&T)` if the node exists, or `None` if the index is out of bounds.
+    /// Returns a node's data, or `None` if the index is out of bounds or removed.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -349,49 +298,33 @@ impl<T> Tree<T> {
             .and_then(|slot| slot.as_ref().map(|node| &node.data))
     }
 
-    /// Retrieves a reference to the data stored in a node without bounds checking.
+    /// Returns a node's data, panicking if the node does not exist.
     ///
-    /// This method is faster than [`Tree::get`] because it does not perform any bounds checking.
-    /// However, it is unsafe to use if the provided index is out of bounds or invalid.
+    /// Use [`Tree::get`] to receive `None` for a missing node.
     ///
-    /// # Parameters
-    /// - `index`: The index of the node to access.
+    /// # Panics
     ///
-    /// # Returns
-    /// A reference to the data stored in the node.
-    ///
-    /// # Safety
-    /// Ensure that:
-    /// - The `index` is within the valid range of node indices in the tree (0 to `Tree::len() - 1`).
-    /// - The node at the given index exists and has not been removed (if applicable).
+    /// Panics if `index` is out of bounds or refers to a removed node.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
     /// let mut tree = Tree::new();
     /// let root = tree.add_node(42);
     ///
-    /// // Safe use: The index is valid.
     /// assert_eq!(tree.get_unchecked(root), &42);
-    ///
-    /// // Unsafe use: Accessing an invalid index would cause undefined behavior.
-    /// // let invalid = tree.get_unchecked(999); // Avoid this!
     /// ```
     #[inline(always)]
     pub fn get_unchecked(&self, index: usize) -> &T {
         &self.nodes[index].as_ref().unwrap().data
     }
 
-    /// Retrieves a mutable reference to the data stored in a node.
-    ///
-    /// # Parameters
-    /// - `index`: The index of the node to access.
-    ///
-    /// # Returns
-    /// `Some(&mut T)` if the node exists, or `None` if the index is out of bounds.
+    /// Returns mutable node data, or `None` if the index is out of bounds or removed.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -406,36 +339,24 @@ impl<T> Tree<T> {
             .and_then(|slot| slot.as_mut().map(|node| &mut node.data))
     }
 
-    /// Retrieves a mutable reference to the data stored in a node without bounds checking.
+    /// Returns mutable node data, panicking if the node does not exist.
     ///
-    /// This method is faster than [`Tree::get_mut`] because it does not perform any bounds checking.
-    /// However, it is unsafe to use if the provided index is out of bounds or invalid.
+    /// Use [`Tree::get_mut`] to receive `None` for a missing node.
     ///
-    /// # Parameters
-    /// - `index`: The index of the node to access.
+    /// # Panics
     ///
-    /// # Returns
-    /// A mutable reference to the data stored in the node.
-    ///
-    /// # Safety
-    /// Ensure that:
-    /// - The `index` is within the valid range of node indices in the tree (0 to `Tree::len() - 1`).
-    /// - The node at the given index exists and has not been removed (if applicable).
-    /// - No other references to the same node are active during this call, to avoid data races or aliasing violations.
+    /// Panics if `index` is out of bounds or refers to a removed node.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
     /// let mut tree = Tree::new();
     /// let root = tree.add_node(42);
     ///
-    /// // Safe use: The index is valid.
     /// *tree.get_unchecked_mut(root) = 99;
     /// assert_eq!(tree.get_unchecked(root), &99);
-    ///
-    /// // Unsafe use: Accessing an invalid index would cause undefined behavior.
-    /// // let invalid = tree.get_unchecked_mut(999); // Avoid this!
     /// ```
     #[inline(always)]
     pub fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
@@ -444,16 +365,12 @@ impl<T> Tree<T> {
 
     /// Returns the parent index of a node, if it has a parent.
     ///
-    /// # Parameters
-    /// - `index`: The index of the node.
-    ///
-    /// # Returns
-    /// `Some(parent_index)` if the node has a parent, or `None` otherwise.
-    ///
     /// # Panics
-    /// This method panics if the index is out of bounds.
+    ///
+    /// Panics if `index` is out of bounds or refers to a removed node.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -466,18 +383,14 @@ impl<T> Tree<T> {
         self.nodes[index].as_ref().unwrap().parent
     }
 
-    /// Returns a slice of the indices of the children of a node.
-    ///
-    /// # Parameters
-    /// - `index`: The index of the node.
-    ///
-    /// # Returns
-    /// A slice containing the indices of the node's children.
+    /// Returns a node's child indices in insertion order.
     ///
     /// # Panics
-    /// This method panics if the index is out of bounds.
+    ///
+    /// Panics if `index` is out of bounds or refers to a removed node.
     ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -490,121 +403,7 @@ impl<T> Tree<T> {
         &self.nodes[index].as_ref().unwrap().children
     }
 
-    /// Traverses the tree in a depth-first manner.
-    ///
-    /// The traversal applies two callbacks:
-    /// - `before_processing_children`: Called before processing the children of a node.
-    /// - `after_processing_the_subtree`: Called after processing all children of a node.
-    ///
-    /// # Parameters
-    /// - `before_processing_children`: A function to apply before visiting children.
-    /// - `after_processing_the_subtree`: A function to apply after visiting children.
-    /// - `state`: Mutable state to share across callbacks.
-    ///
-    /// # Example
-    /// ```rust
-    /// use easy_tree::Tree;
-    ///
-    /// let mut tree = Tree::new();
-    /// let root = tree.add_node("root");
-    /// let child = tree.add_child(root, "child");
-    ///
-    /// let mut log = vec![];
-    /// tree.traverse(
-    ///     |idx, data, log| log.push(format!("Entering node {}: {}", idx, data)),
-    ///     |idx, data, log| log.push(format!("Leaving node {}: {}", idx, data)),
-    ///     &mut log,
-    /// );
-    /// ```
-    pub fn traverse<'a, S>(
-        &'a self,
-        mut before_processing_children: impl FnMut(usize, &'a T, &mut S),
-        mut after_processing_the_subtree: impl FnMut(usize, &'a T, &mut S),
-        s: &mut S,
-    ) {
-        if !matches!(self.nodes.first(), Some(Some(_))) {
-            return;
-        }
-
-        let mut stack = vec![(0, false)];
-
-        while let Some((index, children_visited)) = stack.pop() {
-            let node = self.nodes[index].as_ref().unwrap();
-            if children_visited {
-                // All children are processed, call f2
-                after_processing_the_subtree(index, &node.data, s);
-            } else {
-                // Call f and mark this node's children for processing
-                before_processing_children(index, &node.data, s);
-
-                // Re-push the current node with children_visited set to true
-                stack.push((index, true));
-
-                // Push all children onto the stack
-                for &child in node.children.iter().rev() {
-                    stack.push((child, false));
-                }
-            }
-        }
-    }
-
-    /// Walks the tree recursively, applying the given functions before and after processing the
-    /// children of each node. This version allows for mutable access to the nodes.
-    pub fn traverse_mut<S>(
-        &mut self,
-        mut before_processing_children: impl FnMut(usize, &mut T, &mut S),
-        mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
-        s: &mut S,
-    ) {
-        if matches!(self.nodes.first(), Some(Some(_))) {
-            self.traverse_subtree_mut(
-                0,
-                &mut before_processing_children,
-                &mut after_processing_the_subtree,
-                s,
-            );
-        }
-    }
-
-    /// Walks the tree recursively starting from a specific node, applying the given functions
-    /// before and after processing the children of each node. This version allows for mutable
-    /// access to the nodes.
-    pub fn traverse_subtree_mut<S>(
-        &mut self,
-        start: usize,
-        mut before_processing_children: impl FnMut(usize, &mut T, &mut S),
-        mut after_processing_the_subtree: impl FnMut(usize, &mut T, &mut S),
-        s: &mut S,
-    ) {
-        if self.is_empty() || self.nodes.get(start).and_then(|n| n.as_ref()).is_none() {
-            return;
-        }
-
-        self.stack.clear();
-        self.stack.push((start, false));
-
-        while let Some((index, children_visited)) = self.stack.pop() {
-            if children_visited {
-                // All children are processed, call f2
-                let node = self.nodes[index].as_mut().unwrap();
-                after_processing_the_subtree(index, &mut node.data, s);
-            } else {
-                // Call f and mark this node's children for processing
-                let node = self.nodes[index].as_mut().unwrap();
-                before_processing_children(index, &mut node.data, s);
-
-                // Re-push the current node with children_visited set to true
-                self.stack.push((index, true));
-
-                // Push all children onto the stack
-                for &child in node.children.iter().rev() {
-                    self.stack.push((child, false));
-                }
-            }
-        }
-    }
-
-    /// Returns an iterator over the indices and data of the nodes in the tree.
+    /// Iterates over live node indices and data in index order.
     pub fn iter(&self) -> impl Iterator<Item = (usize, &T)> {
         self.nodes
             .iter()
@@ -612,7 +411,7 @@ impl<T> Tree<T> {
             .filter_map(|(index, slot)| slot.as_ref().map(|node| (index, &node.data)))
     }
 
-    /// Returns a mutable iterator over the indices and data of the nodes in the tree.
+    /// Iterates over live node indices and mutable data in index order.
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (usize, &mut T)> {
         self.nodes
             .iter_mut()
@@ -625,7 +424,7 @@ impl<T> Tree<T> {
         self.node_count == 0
     }
 
-    /// Returns the number of nodes in the tree.
+    /// Returns the number of live nodes, excluding removed slots.
     pub fn len(&self) -> usize {
         self.node_count
     }
@@ -639,17 +438,14 @@ impl<T> Tree<T> {
 
     /// Removes a node and all of its descendants from the tree.
     ///
-    /// The removed node is detached from its parent, and all indices occupied by the
-    /// removed nodes are added to an internal free list for reuse by future
-    /// [`add_node`](Tree::add_node) or [`add_child`](Tree::add_child) calls.
+    /// Detaches the node from its parent and makes the removed indices available
+    /// for reuse by [`Tree::add_node`] and [`Tree::add_child`].
     ///
     /// If `index` is out of bounds or refers to a previously removed node, this method
     /// is a no-op.
     ///
-    /// # Parameters
-    /// - `index`: The index of the root of the subtree to remove.
-    ///
     /// # Example
+    ///
     /// ```rust
     /// use easy_tree::Tree;
     ///
@@ -673,14 +469,12 @@ impl<T> Tree<T> {
             return;
         }
 
-        // Detach from parent
-        if let Some(parent_idx) = self.nodes[index].as_ref().unwrap().parent {
-            if let Some(parent) = self.nodes[parent_idx].as_mut() {
-                parent.children.retain(|&child| child != index);
-            }
+        if let Some(parent_idx) = self.nodes[index].as_ref().unwrap().parent
+            && let Some(parent) = self.nodes[parent_idx].as_mut()
+        {
+            parent.children.retain(|&child| child != index);
         }
 
-        // Remove all nodes in the subtree via iterative DFS
         let mut removal_stack = vec![index];
         while let Some(current) = removal_stack.pop() {
             if let Some(node) = self.nodes[current].take() {
@@ -699,9 +493,14 @@ impl<T> Tree<T> {
     }
 }
 
+impl<T> Default for Tree<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(feature = "rayon")]
 impl<T: Send + Sync> Tree<T> {
-    #[cfg(feature = "rayon")]
     /// Returns a parallel iterator over the indices and data of the nodes in the tree.
     pub fn par_iter(&self) -> impl ParallelIterator<Item = (usize, &T)> {
         self.nodes
@@ -710,7 +509,6 @@ impl<T: Send + Sync> Tree<T> {
             .filter_map(|(index, slot)| slot.as_ref().map(|node| (index, &node.data)))
     }
 
-    #[cfg(feature = "rayon")]
     /// Returns a mutable parallel iterator over the indices and data of the nodes in the tree.
     pub fn par_iter_mut(&mut self) -> impl ParallelIterator<Item = (usize, &mut T)> {
         self.nodes
@@ -721,284 +519,4 @@ impl<T: Send + Sync> Tree<T> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_tree() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        let child2 = tree.add_child(root, 2);
-        let child3 = tree.add_child(child1, 3);
-
-        assert_eq!(tree.get(root), Some(&0));
-        assert_eq!(tree.get(child1), Some(&1));
-        assert_eq!(tree.get(child2), Some(&2));
-        assert_eq!(tree.get(child3), Some(&3));
-
-        assert_eq!(tree.parent_index_unchecked(child1), Some(root));
-        assert_eq!(tree.parent_index_unchecked(child2), Some(root));
-        assert_eq!(tree.parent_index_unchecked(child3), Some(child1));
-
-        assert_eq!(tree.children(root), &[child1, child2]);
-        assert_eq!(tree.children(child1), &[child3]);
-        assert_eq!(tree.children(child2), &[]);
-        assert_eq!(tree.children(child3), &[]);
-    }
-
-    #[test]
-    fn test_tree_iter() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        let child2 = tree.add_child(root, 2);
-        let child3 = tree.add_child(child1, 3);
-
-        let mut iter = tree.iter();
-        assert_eq!(iter.next(), Some((root, &0)));
-        assert_eq!(iter.next(), Some((child1, &1)));
-        assert_eq!(iter.next(), Some((child2, &2)));
-        assert_eq!(iter.next(), Some((child3, &3)));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_tree_iter_mut() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        let child2 = tree.add_child(root, 2);
-        let child3 = tree.add_child(child1, 3);
-
-        let mut iter = tree.iter_mut();
-        assert_eq!(iter.next(), Some((root, &mut 0)));
-        assert_eq!(iter.next(), Some((child1, &mut 1)));
-        assert_eq!(iter.next(), Some((child2, &mut 2)));
-        assert_eq!(iter.next(), Some((child3, &mut 3)));
-        assert_eq!(iter.next(), None);
-    }
-
-    #[test]
-    fn test_tree_traverse() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0); // Root node with data 0
-        let child1 = tree.add_child(root, 1); // Child node with data 1
-        let _child2 = tree.add_child(root, 2); // Child node with data 2
-        let _child3 = tree.add_child(child1, 3); // Child node with data 3
-
-        let mut result = vec![];
-
-        tree.traverse(
-            |index, node, result| result.push(format!("Calling handler for node {index}: {node}")),
-            |index, _node, result| {
-                result.push(format!(
-                    "Finished handling node {index} and all its children"
-                ))
-            },
-            &mut result,
-        );
-
-        assert_eq!(
-            result,
-            vec![
-                "Calling handler for node 0: 0",
-                "Calling handler for node 1: 1",
-                "Calling handler for node 3: 3",
-                "Finished handling node 3 and all its children",
-                "Finished handling node 1 and all its children",
-                "Calling handler for node 2: 2",
-                "Finished handling node 2 and all its children",
-                "Finished handling node 0 and all its children",
-            ]
-        );
-    }
-
-    #[test]
-    fn test_remove_subtree() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        let child1 = tree.add_child(root, "child1");
-        let child2 = tree.add_child(root, "child2");
-        let grandchild1 = tree.add_child(child1, "grandchild1");
-        let _grandchild2 = tree.add_child(child1, "grandchild2");
-
-        assert_eq!(tree.len(), 5);
-
-        tree.remove_subtree(child1);
-
-        assert_eq!(tree.len(), 2);
-        assert_eq!(tree.get(root), Some(&"root"));
-        assert_eq!(tree.get(child1), None);
-        assert_eq!(tree.get(child2), Some(&"child2"));
-        assert_eq!(tree.get(grandchild1), None);
-        assert_eq!(tree.children(root), &[child2]);
-    }
-
-    #[test]
-    fn test_remove_leaf_node() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        let child1 = tree.add_child(root, "child1");
-        let child2 = tree.add_child(root, "child2");
-
-        tree.remove_subtree(child1);
-
-        assert_eq!(tree.len(), 2);
-        assert_eq!(tree.get(child1), None);
-        assert_eq!(tree.children(root), &[child2]);
-    }
-
-    #[test]
-    fn test_remove_root() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        tree.add_child(root, "child1");
-        tree.add_child(root, "child2");
-
-        tree.remove_subtree(root);
-
-        assert!(tree.is_empty());
-        assert_eq!(tree.len(), 0);
-    }
-
-    #[test]
-    fn test_remove_and_reuse() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        tree.add_child(root, 2);
-        tree.add_child(child1, 3);
-
-        // Remove child1 subtree (indices 1 and 3)
-        tree.remove_subtree(child1);
-
-        // Add new nodes — should reuse freed indices
-        let new_child = tree.add_child(root, 10);
-        assert!(new_child == 3 || new_child == 1);
-
-        assert_eq!(tree.len(), 3);
-        assert_eq!(tree.get(new_child), Some(&10));
-    }
-
-    #[test]
-    fn test_iter_after_remove() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        let child2 = tree.add_child(root, 2);
-        tree.add_child(child1, 3);
-
-        tree.remove_subtree(child1);
-
-        let items: Vec<_> = tree.iter().collect();
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0], (root, &0));
-        assert_eq!(items[1], (child2, &2));
-    }
-
-    #[test]
-    fn test_traverse_after_remove() {
-        let mut tree = Tree::new();
-        let root = tree.add_node(0);
-        let child1 = tree.add_child(root, 1);
-        tree.add_child(root, 2);
-        tree.add_child(child1, 3);
-
-        tree.remove_subtree(child1);
-
-        let mut result = vec![];
-        tree.traverse(
-            |idx, data, result: &mut Vec<String>| result.push(format!("enter {idx}:{data}")),
-            |idx, data, result: &mut Vec<String>| result.push(format!("leave {idx}:{data}")),
-            &mut result,
-        );
-
-        assert_eq!(
-            result,
-            vec!["enter 0:0", "enter 2:2", "leave 2:2", "leave 0:0",]
-        );
-    }
-
-    #[test]
-    fn test_traverse_after_removing_first_root() {
-        let mut tree = Tree::new();
-        let root0 = tree.add_node("root0");
-        let root1 = tree.add_node("root1");
-        tree.add_child(root1, "child");
-
-        tree.remove_subtree(root0);
-
-        let mut result = vec![];
-        tree.traverse(
-            |idx, data, result: &mut Vec<String>| result.push(format!("enter {idx}:{data}")),
-            |idx, data, result: &mut Vec<String>| result.push(format!("leave {idx}:{data}")),
-            &mut result,
-        );
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_traverse_mut_after_removing_first_root() {
-        let mut tree = Tree::new();
-        let root0 = tree.add_node(0);
-        let root1 = tree.add_node(10);
-        let child = tree.add_child(root1, 20);
-
-        tree.remove_subtree(root0);
-
-        let mut visited = vec![];
-        tree.traverse_mut(
-            |idx, data, visited: &mut Vec<(usize, i32)>| {
-                *data += 1;
-                visited.push((idx, *data));
-            },
-            |_, _, _| {},
-            &mut visited,
-        );
-
-        assert!(visited.is_empty());
-        assert_eq!(tree.get(root1), Some(&10));
-        assert_eq!(tree.get(child), Some(&20));
-    }
-
-    #[test]
-    fn test_remove_idempotent() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        let child = tree.add_child(root, "child");
-
-        tree.remove_subtree(child);
-        tree.remove_subtree(child); // no-op
-
-        assert_eq!(tree.len(), 1);
-    }
-
-    #[test]
-    fn test_remove_out_of_bounds() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-
-        tree.remove_subtree(999); // no-op
-
-        assert_eq!(tree.len(), 1);
-        assert_eq!(tree.get(root), Some(&"root"));
-    }
-
-    #[test]
-    fn test_add_after_remove_root() {
-        let mut tree = Tree::new();
-        let root = tree.add_node("root");
-        tree.add_child(root, "child");
-
-        tree.remove_subtree(root);
-        assert!(tree.is_empty());
-
-        // New root should start fresh at index 0
-        let new_root = tree.add_node("new_root");
-        assert_eq!(new_root, 0);
-        assert_eq!(tree.get(new_root), Some(&"new_root"));
-        assert_eq!(tree.len(), 1);
-    }
-}
+mod tests;
