@@ -4,75 +4,34 @@
 [![Documentation](https://docs.rs/easy-tree/badge.svg)](https://docs.rs/easy-tree)
 [![Build and test](https://github.com/antouhou/easy-tree/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/antouhou/easy-tree/actions)
 
-`easy-tree` is a lightweight Rust library for managing and traversing hierarchical data structures. It provides a simple interface for creating trees and supports **recursive depth-first traversal** with pre- and post-processing callbacks.
+`easy-tree` is a Rust tree library with depth-first traversal methods. Pass
+callbacks to run before and after each node's children, with shared mutable
+state available to both. The library walks the tree for you, so you can write
+the processing logic without implementing the traversal.
 
-## Key Features
-
-- **Depth-first traversal**: Easily process nodes with callbacks before and after their subtrees.
-- **Simple API**: Add, modify, and retrieve nodes effortlessly.
-- **Customizable traversal logic**: Use callbacks to handle specific traversal behaviors.
-- **Optional parallel iteration**: Boost performance with [rayon](https://docs.rs/rayon).
-
-## Why Use easy-tree?
-
-1. **Designed for Hierarchical Data**: Ideal for file systems, DOM structures, organizational charts, and more.
-2. **Traverse with Precision**: Depth-first traversal with pre- and post-order processing in one simple call.
-3. **Memory Efficient**: Minimal overhead with direct references between nodes.
-4. **Extensible**: Integrates easily into larger systems and workflows.
-
----
+Use `traverse` to read node data, `traverse_mut` to modify it during traversal,
+or `traverse_subtree_mut` to start from a particular node.
 
 ## Installation
 
-Add `easy-tree` to your `Cargo.toml`:
+Add the dependency to `Cargo.toml`:
 
 ```toml
 [dependencies]
-easy-tree = "0.1"
+easy-tree = "0.5"
 ```
 
 To enable parallel iteration:
 
 ```toml
 [dependencies]
-easy-tree = { version = "0.1", features = ["rayon"] }
+easy-tree = { version = "0.5", features = ["rayon"] }
 ```
 
----
+## Create a tree
 
-## How It Works
-
-### Tree Structure
-
-Each node in the tree has:
-- A **data payload** (your custom type)
-- A single parent (or `None` for the root)
-- A list of child indices
-
-### Traversal Flow
-
-Here’s an illustration of a depth-first traversal order:
-
-```
-Root
-├── Child 1
-│   └── Grandchild 1
-├── Child 2
-└── Child 3
-```
-
-Traversal output:
-1. `Visiting Child 1`
-2. `Visiting Grandchild 1`
-3. `Leaving Grandchild 1`
-4. `Leaving Child 1`
-5. ...
-
----
-
-## Examples
-
-### 1. Basic Tree Creation
+`add_node` inserts a node without a parent. `add_child` attaches a new node to an
+existing parent. Both return the inserted node's index.
 
 ```rust
 use easy_tree::Tree;
@@ -83,12 +42,22 @@ fn main() {
     let child = tree.add_child(root, "child");
     let grandchild = tree.add_child(child, "grandchild");
 
-    assert_eq!(tree.get(root), Some(&"root"));
     assert_eq!(tree.get(grandchild), Some(&"grandchild"));
+    assert_eq!(tree.children(root), &[child]);
+    assert_eq!(tree.parent_index_unchecked(grandchild), Some(child));
 }
 ```
 
-### 2. Depth-First Traversal
+`get` and `get_mut` return `None` for an out-of-bounds or removed index.
+`get_unchecked`, `get_unchecked_mut`, `parent_index_unchecked`, and `children`
+panic for those indices. `add_child` rejects a missing parent before it changes
+the tree.
+
+## Traverse nodes
+
+One call to `traverse` runs both the before-children and after-children callbacks
+for each node. Children are visited in insertion order. Both callbacks receive
+the mutable state passed as the final argument.
 
 ```rust
 use easy_tree::Tree;
@@ -96,77 +65,101 @@ use easy_tree::Tree;
 fn main() {
     let mut tree = Tree::new();
     let root = tree.add_node("root");
-    let child1 = tree.add_child(root, "child1");
-    let grandchild1 = tree.add_child(child1, "grandchild1");
-    let child2 = tree.add_child(root, "child2");
+    tree.add_child(root, "child");
 
-    let mut log = vec![];
+    let mut log = Vec::new();
     tree.traverse(
-        |idx, data, log| log.push(format!("Visiting node {}: {}", idx, data)),
-        |idx, data, log| log.push(format!("Finished node {}: {}", idx, data)),
+        |_, data, log| log.push(format!("enter {data}")),
+        |_, data, log| log.push(format!("leave {data}")),
         &mut log,
     );
 
-    println!("{:?}", log);
+    assert_eq!(log, ["enter root", "enter child", "leave child", "leave root"]);
 }
 ```
 
-### 3. Parallel Iteration (Optional)
+`traverse` and `traverse_mut` visit index zero and its descendants. They do
+nothing if that slot is empty, even if other disconnected roots remain.
+`traverse_subtree_mut` starts at a caller-selected index and gives callbacks
+mutable access to node data.
+
+### Walk a directory tree
+
+The before-children callback can add a directory to the current path, and the
+after-children callback can remove it. Sharing the path between callbacks keeps
+it available while processing each directory's descendants.
 
 ```rust
 use easy_tree::Tree;
 
 fn main() {
     let mut tree = Tree::new();
-    let root = tree.add_node(0);
-    let _child1 = tree.add_child(root, 1);
-    let _child2 = tree.add_child(root, 2);
+    let root = tree.add_node("root");
+    let home = tree.add_child(root, "home");
+    tree.add_child(home, "documents");
 
-    #[cfg(feature = "rayon")]
-    {
-        tree.par_iter().for_each(|(idx, data)| {
-            println!("Processing node {}: {}", idx, data);
-        });
-    }
+    let mut path = Vec::new();
+    tree.traverse(
+        |_, name, path| {
+            path.push(*name);
+            println!("/{}", path.join("/"));
+        },
+        |_, _, path| {
+            path.pop();
+        },
+        &mut path,
+    );
+
+    assert!(path.is_empty());
 }
 ```
 
----
+## Iterate in parallel
 
-## Use Cases
+With the `rayon` feature enabled, import `ParallelIterator` to use its methods:
 
-### Represent a File System
+```rust
+use easy_tree::rayon::iter::ParallelIterator;
+use easy_tree::Tree;
+
+fn main() {
+    let mut tree = Tree::new();
+    let root = tree.add_node(0);
+    tree.add_child(root, 1);
+    tree.add_child(root, 2);
+
+    tree.par_iter().for_each(|(index, data)| {
+        println!("Node {index}: {data}");
+    });
+}
+```
+
+`iter` and `iter_mut` visit every live node in index order, including disconnected
+roots. `par_iter` and `par_iter_mut` also include every live node, but parallel
+callbacks may run in any order.
+
+## Remove a subtree
+
+`remove_subtree` removes a node and its descendants and detaches it from its parent.
+Removing an out-of-bounds or already removed index does nothing.
 
 ```rust
 use easy_tree::Tree;
 
 fn main() {
-    let mut fs = Tree::new();
-    let root = fs.add_node("root/");
-    let home = fs.add_child(root, "home/");
-    let user = fs.add_child(home, "user/");
-    let file = fs.add_child(user, "file.txt");
+    let mut tree = Tree::new();
+    let root = tree.add_node("root");
+    let child = tree.add_child(root, "child");
+    tree.add_child(child, "grandchild");
 
-    println!("Tree structure:");
-    fs.traverse(
-        |_, data, _| println!("Entering {}", data),
-        |_, data, _| println!("Leaving {}", data),
-        &mut (),
-    );
+    tree.remove_subtree(child);
+
+    assert_eq!(tree.len(), 1);
+    assert!(tree.children(root).is_empty());
+    assert_eq!(tree.get(child), None);
 }
 ```
 
----
-
-## Performance
-
-- **Low Memory Overhead**: Nodes are stored contiguously in a vector.
-- **Efficient Traversal**: Iterative depth-first traversal minimizes recursion overhead.
-- **Parallel Ready**: Enable the `rayon` feature for concurrent processing.
-
----
-
-## Advanced Features
-
-1. **Custom Traversal Logic**: Use pre- and post-processing callbacks for fine-grained control.
-2. **Flexible Node Access**: Retrieve, update, or delete nodes efficiently.
+Insertions can reuse removed indices. Stop using an index after removing its
+node, since it may later identify another node. `len` counts live nodes, so it
+is not an upper bound on their indices.
