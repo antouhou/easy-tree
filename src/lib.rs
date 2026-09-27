@@ -278,6 +278,11 @@ impl<T> Tree<T> {
         }
     }
 
+    /// Returns id of the next node to be inserted
+    pub fn next_node_id(&self) -> usize {
+        self.free_list.last().copied().unwrap_or(self.nodes.len())
+    }
+
     /// Adds a child node to an existing node in the tree.
     ///
     /// # Parameters
