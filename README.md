@@ -163,3 +163,22 @@ fn main() {
 Insertions can reuse removed indices. Stop using an index after removing its
 node, since it may later identify another node. `len` counts live nodes, so it
 is not an upper bound on their indices.
+
+Use `remove_subtree_with` to receive each removed index and take ownership of its
+data. The callback runs once per removed node, starting with the subtree root,
+then visiting descendants depth-first with siblings in reverse insertion order.
+It is never called for an out-of-bounds or already removed index.
+
+```rust
+use easy_tree::Tree;
+
+let mut tree = Tree::new();
+let root = tree.add_node(String::from("root"));
+let child = tree.add_child(root, String::from("child"));
+
+let mut removed = Vec::new();
+tree.remove_subtree_with(child, |index, item| removed.push((index, item)));
+
+assert_eq!(removed, vec![(child, String::from("child"))]);
+assert_eq!(tree.len(), 1);
+```

@@ -229,6 +229,99 @@ fn test_remove_subtree() {
 }
 
 #[test]
+fn test_remove_subtree_with_owned_items_and_reuse() {
+    let mut tree = Tree::new();
+    let root = tree.add_node(String::from("root"));
+    let branch = tree.add_child(root, String::from("branch"));
+    let sibling = tree.add_child(root, String::from("sibling"));
+    let first_child = tree.add_child(branch, String::from("first child"));
+    let second_child = tree.add_child(branch, String::from("second child"));
+    let grandchild = tree.add_child(second_child, String::from("grandchild"));
+    let other_root = tree.add_node(String::from("other root"));
+
+    let mut removed = Vec::new();
+    tree.remove_subtree_with(branch, |index, item| removed.push((index, item)));
+
+    assert_eq!(
+        removed,
+        vec![
+            (branch, String::from("branch")),
+            (second_child, String::from("second child")),
+            (grandchild, String::from("grandchild")),
+            (first_child, String::from("first child")),
+        ]
+    );
+    assert_eq!(tree.len(), 3);
+    assert_eq!(tree.children(root), &[sibling]);
+    assert_eq!(tree.parent_index_unchecked(sibling), Some(root));
+    assert_eq!(tree.get(root).map(String::as_str), Some("root"));
+    assert_eq!(tree.get(sibling).map(String::as_str), Some("sibling"));
+    assert_eq!(tree.get(other_root).map(String::as_str), Some("other root"));
+    for &(index, _) in &removed {
+        assert_eq!(tree.get(index), None);
+    }
+
+    for (index, item) in removed.into_iter().rev() {
+        assert_eq!(tree.next_node_id(), index);
+        assert_eq!(tree.add_child(root, item), index);
+        assert_eq!(tree.parent_index_unchecked(index), Some(root));
+        assert!(tree.children(index).is_empty());
+    }
+    assert_eq!(tree.len(), 7);
+}
+
+#[test]
+fn test_remove_subtree_with_skips_missing_indices() {
+    let mut tree = Tree::new();
+    let root = tree.add_node("root");
+    let child = tree.add_child(root, "child");
+    tree.remove_subtree(child);
+
+    for index in [child, tree.nodes.len(), usize::MAX] {
+        tree.remove_subtree_with(index, |_, _| panic!("missing node triggered callback"));
+    }
+
+    assert_eq!(tree.iter().collect::<Vec<_>>(), vec![(root, &"root")]);
+    assert_eq!(tree.len(), 1);
+    assert!(tree.children(root).is_empty());
+    assert_eq!(tree.next_node_id(), child);
+
+    tree.clear();
+    tree.remove_subtree_with(root, |_, _| panic!("empty tree triggered callback"));
+    assert!(tree.is_empty());
+    assert_eq!(tree.next_node_id(), 0);
+}
+
+#[test]
+fn test_remove_subtree_with_roots_and_storage_reset() {
+    let mut tree = Tree::new();
+    let root = tree.add_node("root");
+    let child = tree.add_child(root, "child");
+    let other_root = tree.add_node("other root");
+    let other_child = tree.add_child(other_root, "other child");
+
+    let mut removed = Vec::new();
+    tree.remove_subtree_with(root, |index, item| removed.push((index, item)));
+
+    assert_eq!(removed, vec![(root, "root"), (child, "child")]);
+    assert_eq!(tree.len(), 2);
+    assert_eq!(tree.children(other_root), &[other_child]);
+    assert_eq!(tree.parent_index_unchecked(other_child), Some(other_root));
+
+    removed.clear();
+    tree.remove_subtree_with(other_root, |index, item| removed.push((index, item)));
+
+    assert_eq!(
+        removed,
+        vec![(other_root, "other root"), (other_child, "other child")]
+    );
+    assert!(tree.is_empty());
+    assert_eq!(tree.iter().next(), None);
+    assert_eq!(tree.next_node_id(), 0);
+    assert_eq!(tree.add_node("new root"), 0);
+}
+
+#[test]
 fn test_remove_leaf_node() {
     let mut tree = Tree::new();
     let root = tree.add_node("root");
