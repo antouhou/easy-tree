@@ -440,6 +440,7 @@ impl<T> Tree<T> {
     ///
     /// Detaches the node from its parent and makes the removed indices available
     /// for reuse by [`Tree::add_node`] and [`Tree::add_child`].
+    /// Use [`Tree::remove_subtree_with`] to receive the removed indices and data.
     ///
     /// If `index` is out of bounds or refers to a previously removed node, this method
     /// is a no-op.
@@ -465,6 +466,40 @@ impl<T> Tree<T> {
     /// assert_eq!(tree.children(root), &[child2]);
     /// ```
     pub fn remove_subtree(&mut self, index: usize) {
+        self.remove_subtree_with(index, |_, _| {});
+    }
+
+    /// Removes a node and its descendants, passing each index and owned data to a callback.
+    ///
+    /// Calls `on_remove` once per removed node, starting with `index`, then visiting
+    /// descendants depth-first with siblings in reverse insertion order.
+    /// Detaches the subtree from its parent and makes removed indices available
+    /// for reuse, as with [`Tree::remove_subtree`].
+    ///
+    /// If `index` is out of bounds or already removed, does nothing and never
+    /// calls `on_remove`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use easy_tree::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// let root = tree.add_node(String::from("root"));
+    /// let child = tree.add_child(root, String::from("child"));
+    /// let grandchild = tree.add_child(child, String::from("grandchild"));
+    ///
+    /// let mut removed = Vec::new();
+    /// tree.remove_subtree_with(child, |index, item| removed.push((index, item)));
+    ///
+    /// assert_eq!(removed, vec![
+    ///     (child, String::from("child")),
+    ///     (grandchild, String::from("grandchild")),
+    /// ]);
+    /// assert_eq!(tree.len(), 1);
+    /// assert!(tree.children(root).is_empty());
+    /// ```
+    pub fn remove_subtree_with(&mut self, index: usize, mut on_remove: impl FnMut(usize, T)) {
         if !matches!(self.nodes.get(index), Some(Some(_))) {
             return;
         }
@@ -481,6 +516,7 @@ impl<T> Tree<T> {
                 removal_stack.extend(node.children);
                 self.free_list.push(current);
                 self.node_count -= 1;
+                on_remove(current, node.data);
             }
         }
 
