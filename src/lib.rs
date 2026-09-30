@@ -182,7 +182,7 @@ pub struct Tree<T> {
     free_list: Vec<usize>,
     /// Number of live nodes.
     node_count: usize,
-    /// Retains stack capacity between mutable traversals.
+    /// Retains stack capacity between mutable traversals and subtree removals.
     traversal_stack: Vec<(usize, bool)>,
 }
 
@@ -510,10 +510,12 @@ impl<T> Tree<T> {
             parent.children.retain(|&child| child != index);
         }
 
-        let mut removal_stack = vec![index];
-        while let Some(current) = removal_stack.pop() {
+        self.traversal_stack.clear();
+        self.traversal_stack.push((index, false));
+        while let Some((current, _)) = self.traversal_stack.pop() {
             if let Some(node) = self.nodes[current].take() {
-                removal_stack.extend(node.children);
+                self.traversal_stack
+                    .extend(node.children.into_iter().map(|child| (child, false)));
                 self.free_list.push(current);
                 self.node_count -= 1;
                 on_remove(current, node.data);
