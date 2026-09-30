@@ -113,7 +113,7 @@
 pub use rayon;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
-use std::mem;
+use std::{collections::HashSet, mem};
 
 mod removal;
 mod traversal;
@@ -186,6 +186,8 @@ pub struct Tree<T> {
     node_count: usize,
     /// Retains stack capacity between mutable traversals and subtree removals.
     traversal_stack: Vec<(usize, bool)>,
+    /// Retains parent-tracking capacity between batch removals.
+    affected_parents: HashSet<usize>,
 }
 
 impl<T> Tree<T> {
@@ -204,6 +206,7 @@ impl<T> Tree<T> {
             free_list: Vec::new(),
             node_count: 0,
             traversal_stack: Vec::new(),
+            affected_parents: HashSet::new(),
         }
     }
 
@@ -459,6 +462,7 @@ impl<T> Tree<T> {
     pub fn clear(&mut self) {
         self.nodes.clear();
         self.free_list.clear();
+        self.affected_parents.clear();
         self.node_count = 0;
     }
 }
