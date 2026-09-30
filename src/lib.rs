@@ -113,6 +113,7 @@
 pub use rayon;
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
+use std::mem;
 
 mod traversal;
 
@@ -361,6 +362,30 @@ impl<T> Tree<T> {
     #[inline(always)]
     pub fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
         &mut self.nodes[index].as_mut().unwrap().data
+    }
+
+    /// Replaces a node's data and returns the previous data.
+    ///
+    /// Preserves the node's index, parent, and children. Returns `None` if the
+    /// index is out of bounds or removed, dropping the supplied data.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use easy_tree::Tree;
+    ///
+    /// let mut tree = Tree::new();
+    /// let root = tree.add_node("root");
+    /// let child = tree.add_child(root, "child");
+    ///
+    /// assert_eq!(tree.replace(root, "new root"), Some("root"));
+    /// assert_eq!(tree.get(root), Some(&"new root"));
+    /// assert_eq!(tree.children(root), &[child]);
+    /// assert_eq!(tree.parent_index_unchecked(child), Some(root));
+    /// ```
+    pub fn replace(&mut self, index: usize, data: T) -> Option<T> {
+        let node_data = self.get_mut(index)?;
+        Some(mem::replace(node_data, data))
     }
 
     /// Returns the parent index of a node, if it has a parent.
