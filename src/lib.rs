@@ -115,6 +115,7 @@ pub use rayon;
 use rayon::prelude::*;
 use std::mem;
 
+mod removal;
 mod traversal;
 
 /// A node's data, child indices, and optional parent index.
@@ -459,100 +460,6 @@ impl<T> Tree<T> {
         self.nodes.clear();
         self.free_list.clear();
         self.node_count = 0;
-    }
-
-    /// Removes a node and all of its descendants from the tree.
-    ///
-    /// Detaches the node from its parent and makes the removed indices available
-    /// for reuse by [`Tree::add_node`] and [`Tree::add_child`].
-    /// Use [`Tree::remove_subtree_with`] to receive the removed indices and data.
-    ///
-    /// If `index` is out of bounds or refers to a previously removed node, this method
-    /// is a no-op.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use easy_tree::Tree;
-    ///
-    /// let mut tree = Tree::new();
-    /// let root = tree.add_node("root");
-    /// let child1 = tree.add_child(root, "child1");
-    /// let child2 = tree.add_child(root, "child2");
-    /// let grandchild = tree.add_child(child1, "grandchild");
-    ///
-    /// assert_eq!(tree.len(), 4);
-    ///
-    /// tree.remove_subtree(child1);
-    ///
-    /// assert_eq!(tree.len(), 2);
-    /// assert_eq!(tree.get(child1), None);
-    /// assert_eq!(tree.get(grandchild), None);
-    /// assert_eq!(tree.children(root), &[child2]);
-    /// ```
-    pub fn remove_subtree(&mut self, index: usize) {
-        self.remove_subtree_with(index, |_, _| {});
-    }
-
-    /// Removes a node and its descendants, passing each index and owned data to a callback.
-    ///
-    /// Calls `on_remove` once per removed node, starting with `index`, then visiting
-    /// descendants depth-first with siblings in reverse insertion order.
-    /// Detaches the subtree from its parent and makes removed indices available
-    /// for reuse, as with [`Tree::remove_subtree`].
-    ///
-    /// If `index` is out of bounds or already removed, does nothing and never
-    /// calls `on_remove`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use easy_tree::Tree;
-    ///
-    /// let mut tree = Tree::new();
-    /// let root = tree.add_node(String::from("root"));
-    /// let child = tree.add_child(root, String::from("child"));
-    /// let grandchild = tree.add_child(child, String::from("grandchild"));
-    ///
-    /// let mut removed = Vec::new();
-    /// tree.remove_subtree_with(child, |index, item| removed.push((index, item)));
-    ///
-    /// assert_eq!(removed, vec![
-    ///     (child, String::from("child")),
-    ///     (grandchild, String::from("grandchild")),
-    /// ]);
-    /// assert_eq!(tree.len(), 1);
-    /// assert!(tree.children(root).is_empty());
-    /// ```
-    pub fn remove_subtree_with(&mut self, index: usize, mut on_remove: impl FnMut(usize, T)) {
-        if !matches!(self.nodes.get(index), Some(Some(_))) {
-            return;
-        }
-
-        if let Some(parent_idx) = self.nodes[index].as_ref().unwrap().parent
-            && let Some(parent) = self.nodes[parent_idx].as_mut()
-        {
-            parent.children.retain(|&child| child != index);
-        }
-
-        self.traversal_stack.clear();
-        self.traversal_stack.push((index, false));
-        while let Some((current, _)) = self.traversal_stack.pop() {
-            if let Some(node) = self.nodes[current].take() {
-                self.traversal_stack
-                    .extend(node.children.into_iter().map(|child| (child, false)));
-                self.free_list.push(current);
-                self.node_count -= 1;
-                on_remove(current, node.data);
-            }
-        }
-
-        // Reset storage when the tree becomes empty, so the next add_node
-        // starts fresh from index 0.
-        if self.node_count == 0 {
-            self.nodes.clear();
-            self.free_list.clear();
-        }
     }
 }
 
