@@ -1,6 +1,87 @@
 use crate::Tree;
 use std::panic::{self, AssertUnwindSafe};
 
+#[derive(Debug, PartialEq)]
+struct NonCloneData(i32);
+
+#[test]
+fn test_replace_preserves_tree_structure_and_traversal() {
+    let mut tree = Tree::new();
+    let root = tree.add_node(NonCloneData(0));
+    let branch = tree.add_child(root, NonCloneData(1));
+    let sibling = tree.add_child(root, NonCloneData(2));
+    let first_child = tree.add_child(branch, NonCloneData(3));
+    let second_child = tree.add_child(branch, NonCloneData(4));
+    let grandchild = tree.add_child(first_child, NonCloneData(5));
+    let removed_child = tree.add_child(branch, NonCloneData(6));
+    tree.remove_subtree(removed_child);
+
+    assert_eq!(
+        tree.replace(branch, NonCloneData(10)),
+        Some(NonCloneData(1))
+    );
+    assert_eq!(tree.replace(root, NonCloneData(20)), Some(NonCloneData(0)));
+
+    assert_eq!(tree.len(), 6);
+    assert_eq!(tree.next_node_id(), removed_child);
+    assert_eq!(tree.parent_index_unchecked(root), None);
+    assert_eq!(tree.children(root), &[branch, sibling]);
+    assert_eq!(tree.parent_index_unchecked(branch), Some(root));
+    assert_eq!(tree.children(branch), &[first_child, second_child]);
+    assert_eq!(tree.parent_index_unchecked(first_child), Some(branch));
+    assert_eq!(tree.parent_index_unchecked(second_child), Some(branch));
+    assert_eq!(tree.children(first_child), &[grandchild]);
+    assert_eq!(tree.parent_index_unchecked(grandchild), Some(first_child));
+    assert_eq!(tree.get(removed_child), None);
+
+    let mut visited = Vec::new();
+    tree.traverse(
+        |index, data, visited| visited.push((index, data.0)),
+        |_, _, _| {},
+        &mut visited,
+    );
+
+    assert_eq!(
+        visited,
+        vec![
+            (root, 20),
+            (branch, 10),
+            (first_child, 3),
+            (grandchild, 5),
+            (second_child, 4),
+            (sibling, 2),
+        ]
+    );
+}
+
+#[test]
+fn test_replace_missing_indices_preserves_tree_and_vacant_slots() {
+    let mut tree = Tree::new();
+    assert_eq!(tree.replace(0, "replacement"), None);
+    assert!(tree.is_empty());
+    assert_eq!(tree.next_node_id(), 0);
+
+    let root = tree.add_node("root");
+    let removed_child = tree.add_child(root, "removed");
+    let surviving_child = tree.add_child(root, "surviving");
+    tree.remove_subtree(removed_child);
+
+    for index in [removed_child, tree.nodes.len(), usize::MAX] {
+        assert_eq!(tree.replace(index, "replacement"), None);
+    }
+
+    assert_eq!(
+        tree.iter().collect::<Vec<_>>(),
+        vec![(root, &"root"), (surviving_child, &"surviving")]
+    );
+    assert_eq!(tree.len(), 2);
+    assert_eq!(tree.children(root), &[surviving_child]);
+    assert_eq!(tree.parent_index_unchecked(surviving_child), Some(root));
+    assert_eq!(tree.next_node_id(), removed_child);
+    assert_eq!(tree.add_child(root, "new child"), removed_child);
+    assert_eq!(tree.children(root), &[surviving_child, removed_child]);
+}
+
 #[test]
 fn test_add_child_rejects_removed_parent_without_mutating_tree() {
     let mut tree = Tree::new();
