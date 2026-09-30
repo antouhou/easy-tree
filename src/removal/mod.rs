@@ -1,19 +1,16 @@
 use crate::Tree;
-use std::{collections::HashSet, mem};
+use std::mem;
 
 /// Finishes the active subtree and repairs parent links when removal ends or unwinds.
 struct SubtreeRemoval<'a, T> {
     tree: &'a mut Tree<T>,
-    affected_parents: HashSet<usize>,
 }
 
 impl<'a, T> SubtreeRemoval<'a, T> {
     fn new(tree: &'a mut Tree<T>) -> Self {
         tree.traversal_stack.clear();
-        Self {
-            tree,
-            affected_parents: HashSet::new(),
-        }
+        tree.affected_parents.clear();
+        Self { tree }
     }
 
     fn remove_next_node(&mut self) -> Option<(usize, T)> {
@@ -44,7 +41,7 @@ impl<T> Drop for SubtreeRemoval<'_, T> {
             drop(data);
         }
 
-        for parent_index in self.affected_parents.drain() {
+        for parent_index in self.tree.affected_parents.drain() {
             let Some(parent) = self.tree.nodes[parent_index].as_mut() else {
                 continue;
             };
@@ -223,7 +220,7 @@ impl<T> Tree<T> {
                 continue;
             };
             if let Some(parent) = node.parent {
-                removal.affected_parents.insert(parent);
+                removal.tree.affected_parents.insert(parent);
             }
             removal.remove_subtree_with(index, &mut on_remove);
         }
